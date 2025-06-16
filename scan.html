@@ -38,9 +38,14 @@
             color: white;
             border: none;
             padding: 10px 20px;
-            margin: 10px;
+            margin: 10px 5px;
             border-radius: 5px;
             cursor: pointer;
+        }
+        input {
+            padding: 10px;
+            width: 200px;
+            margin: 10px;
         }
     </style>
 </head>
@@ -53,6 +58,7 @@
     </div>
 
     <div id="scan-result"></div>
+    <button id="rescan-btn" style="display:none;">Scan Again</button>
 
     <button id="manual-btn">Enter ID Manually</button>
 
@@ -69,6 +75,7 @@
         const manualBtn = document.getElementById('manual-btn');
         const manualForm = document.getElementById('manual-form');
         const submitManual = document.getElementById('submit-manual');
+        const rescanBtn = document.getElementById('rescan-btn');
 
         let scannerActive = true;
 
@@ -131,8 +138,7 @@
 
                 const studentId = prompt("Please enter your Student ID:");
                 if (!studentId) {
-                    resultDiv.textContent = "Attendance not submitted";
-                    resultDiv.className = "error";
+                    showResult("Attendance not submitted", false);
                     scannerActive = true;
                     return;
                 }
@@ -140,9 +146,8 @@
                 submitAttendance(studentId, qrData.date, qrData.token);
 
             } catch (e) {
-                console.error("Error reading QR code:", e.message);
-                resultDiv.textContent = "Error: " + e.message;
-                resultDiv.className = "error";
+                console.error("QR parse error:", e.message);
+                showResult("Error: " + e.message, false);
                 scannerActive = true;
             }
         }
@@ -162,14 +167,18 @@
             .then(response => response.json())
             .then(data => {
                 console.log("Server response:", data);
-                resultDiv.textContent = data.message;
-                resultDiv.className = data.success ? "success" : "error";
+                showResult(data.message, data.success);
             })
             .catch(error => {
                 console.error("Network error:", error);
-                resultDiv.textContent = "Network error: " + error.message;
-                resultDiv.className = "error";
+                showResult("Network error: " + error.message, false);
             });
+        }
+
+        function showResult(message, success = true) {
+            resultDiv.textContent = message;
+            resultDiv.className = success ? "success" : "error";
+            rescanBtn.style.display = "inline-block";
         }
 
         // Manual entry form
@@ -192,6 +201,15 @@
             if (!token) return;
 
             submitAttendance(studentId, date, token);
+        });
+
+        // Rescan button handler
+        rescanBtn.addEventListener('click', () => {
+            resultDiv.textContent = "";
+            resultDiv.className = "";
+            scannerActive = true;
+            requestAnimationFrame(tick);
+            rescanBtn.style.display = 'none';
         });
 
         // Start camera on load
