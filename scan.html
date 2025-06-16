@@ -46,16 +46,16 @@
 </head>
 <body>
     <h1>SmartTrack Attendance</h1>
-    
+
     <div id="scanner-container">
-        <video id="scanner"></video>
+        <video id="scanner" autoplay playsinline></video>
         <canvas id="canvas" style="display:none;"></canvas>
     </div>
-    
+
     <div id="scan-result"></div>
-    
+
     <button id="manual-btn">Enter ID Manually</button>
-    
+
     <div id="manual-form" style="display:none; margin-top:20px;">
         <input type="text" id="student-id" placeholder="Enter Student ID">
         <button id="submit-manual">Submit</button>
@@ -69,71 +69,84 @@
         const manualBtn = document.getElementById('manual-btn');
         const manualForm = document.getElementById('manual-form');
         const submitManual = document.getElementById('submit-manual');
-        
+
         let scannerActive = true;
-        
-        // Start camera
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(function(stream) {
-                video.srcObject = stream;
-                video.play();
-                requestAnimationFrame(tick);
-            })
-            .catch(function(err) {
-                resultDiv.textContent = "Error accessing camera: " + err.message;
-                resultDiv.className = "error";
-                scannerActive = false;
-            });
-        
+
+        function startCamera() {
+            const constraints = {
+                video: {
+                    facingMode: window.innerWidth < 768 ? { ideal: "environment" } : "user"
+                }
+            };
+
+            navigator.mediaDevices.getUserMedia(constraints)
+                .then(function (stream) {
+                    console.log("Camera started.");
+                    video.srcObject = stream;
+
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        requestAnimationFrame(tick);
+                    };
+                })
+                .catch(function (err) {
+                    console.error("Camera access error:", err);
+                    resultDiv.textContent = "Error accessing camera: " + err.message;
+                    resultDiv.className = "error";
+                    scannerActive = false;
+                });
+        }
+
         function tick() {
             if (!scannerActive) return;
-            
+
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
+
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const code = jsQR(imageData.data, imageData.width, imageData.height, {
                     inversionAttempts: "dontInvert",
                 });
-                
+
                 if (code) {
+                    console.log("QR Code detected:", code.data);
                     processQRCode(code.data);
                     scannerActive = false;
+                    return;
                 }
             }
-            
+
             requestAnimationFrame(tick);
         }
-        
+
         function processQRCode(data) {
             try {
                 const qrData = JSON.parse(data);
-                
+
                 if (!qrData.token || !qrData.date) {
                     throw new Error("Invalid QR code format");
                 }
-                
-                // Get student ID (in a real app, this would come from student login)
+
                 const studentId = prompt("Please enter your Student ID:");
-                
                 if (!studentId) {
                     resultDiv.textContent = "Attendance not submitted";
                     resultDiv.className = "error";
                     scannerActive = true;
                     return;
                 }
-                
+
                 submitAttendance(studentId, qrData.date, qrData.token);
-                
+
             } catch (e) {
+                console.error("Error reading QR code:", e.message);
                 resultDiv.textContent = "Error: " + e.message;
                 resultDiv.className = "error";
                 scannerActive = true;
             }
         }
-        
+
         function submitAttendance(studentId, date, token) {
             fetch('process_attendance.php', {
                 method: 'POST',
@@ -148,36 +161,41 @@
             })
             .then(response => response.json())
             .then(data => {
+                console.log("Server response:", data);
                 resultDiv.textContent = data.message;
                 resultDiv.className = data.success ? "success" : "error";
             })
             .catch(error => {
+                console.error("Network error:", error);
                 resultDiv.textContent = "Network error: " + error.message;
                 resultDiv.className = "error";
             });
         }
-        
-        // Manual entry
+
+        // Manual entry form
         manualBtn.addEventListener('click', () => {
             manualForm.style.display = 'block';
             manualBtn.style.display = 'none';
         });
-        
+
         submitManual.addEventListener('click', () => {
-            const studentId = document.getElementById('student-id').value;
+            const studentId = document.getElementById('student-id').value.trim();
             if (!studentId) {
                 alert("Please enter a Student ID");
                 return;
             }
-            
+
             const date = prompt("Enter attendance date (YYYY-MM-DD):");
             if (!date) return;
-            
+
             const token = prompt("Enter the attendance token (from your teacher):");
             if (!token) return;
-            
+
             submitAttendance(studentId, date, token);
         });
+
+        // Start camera on load
+        window.addEventListener('load', startCamera);
     </script>
 </body>
 </html>
