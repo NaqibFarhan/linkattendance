@@ -1,183 +1,117 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>SmartTrack Attendance</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
-        }
-        #scanner-container {
-            width: 100%;
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        #scan-result {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 5px;
-        }
-        .success {
-            background-color: #dff0d8;
-            color: #3c763d;
-        }
-        .error {
-            background-color: #f2dede;
-            color: #a94442;
-        }
-        video {
-            width: 100%;
-            border: 2px solid #800000;
-            border-radius: 5px;
-        }
-        button {
-            background-color: #800000;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            margin: 10px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SmartTrack QR Scanner</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      text-align: center;
+      background: #f8f9fa;
+      padding: 0;
+      margin: 0;
+    }
+
+    h1 {
+      color: #800000;
+      padding: 20px;
+      font-size: 1.8rem;
+    }
+
+    video {
+      width: 100%;
+      max-width: 500px;
+      border: 3px solid #800000;
+      border-radius: 10px;
+      margin-top: 10px;
+    }
+
+    #message {
+      margin-top: 20px;
+      font-weight: bold;
+      color: #333;
+      padding: 10px;
+    }
+
+    .error {
+      color: #a94442;
+    }
+
+    .success {
+      color: #3c763d;
+    }
+  </style>
 </head>
 <body>
-    <h1>SmartTrack Attendance</h1>
-    
-    <div id="scanner-container">
-        <video id="scanner"></video>
-        <canvas id="canvas" style="display:none;"></canvas>
-    </div>
-    
-    <div id="scan-result"></div>
-    
-    <button id="manual-btn">Enter ID Manually</button>
-    
-    <div id="manual-form" style="display:none; margin-top:20px;">
-        <input type="text" id="student-id" placeholder="Enter Student ID">
-        <button id="submit-manual">Submit</button>
-    </div>
 
-    <script>
-        const video = document.getElementById('scanner');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const resultDiv = document.getElementById('scan-result');
-        const manualBtn = document.getElementById('manual-btn');
-        const manualForm = document.getElementById('manual-form');
-        const submitManual = document.getElementById('submit-manual');
-        
-        let scannerActive = true;
-        
-        // Start camera
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(function(stream) {
-                video.srcObject = stream;
-                video.play();
-                requestAnimationFrame(tick);
-            })
-            .catch(function(err) {
-                resultDiv.textContent = "Error accessing camera: " + err.message;
-                resultDiv.className = "error";
-                scannerActive = false;
-            });
-        
-        function tick() {
-            if (!scannerActive) return;
-            
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                    inversionAttempts: "dontInvert",
-                });
-                
-                if (code) {
-                    processQRCode(code.data);
-                    scannerActive = false;
-                }
-            }
-            
-            requestAnimationFrame(tick);
+  <h1>📷 SmartTrack Attendance</h1>
+  <video id="video" autoplay></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+  <div id="message">Scan the QR code provided by your teacher</div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const message = document.getElementById('message');
+
+    // Start camera
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then((stream) => {
+        video.srcObject = stream;
+        video.setAttribute("playsinline", true); // iOS fix
+        video.play();
+        requestAnimationFrame(tick);
+      })
+      .catch((err) => {
+        message.textContent = "Camera access error: " + err.message;
+        message.className = "error";
+      });
+
+    function isValidAttendanceURL(url) {
+      try {
+        const parsed = new URL(url);
+        const params = parsed.searchParams;
+        return (
+          parsed.pathname.endsWith("scan_attendance.php") &&
+          params.has("student_id") &&
+          params.has("class_id") &&
+          params.has("session_id")
+        );
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function tick() {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, canvas.width, canvas.height);
+
+        if (code) {
+          const scannedData = code.data;
+          message.textContent = "QR code detected!";
+          message.className = "success";
+
+          if (isValidAttendanceURL(scannedData)) {
+            message.textContent = "✅ Redirecting to mark attendance...";
+            window.location.href = scannedData;
+          } else {
+            message.textContent = "❌ Invalid QR code format.";
+            message.className = "error";
+          }
+
+          return; // stop scanning after one detection
         }
-        
-        function processQRCode(data) {
-            try {
-                const qrData = JSON.parse(data);
-                
-                if (!qrData.token || !qrData.date) {
-                    throw new Error("Invalid QR code format");
-                }
-                
-                // Get student ID (in a real app, this would come from student login)
-                const studentId = prompt("Please enter your Student ID:");
-                
-                if (!studentId) {
-                    resultDiv.textContent = "Attendance not submitted";
-                    resultDiv.className = "error";
-                    scannerActive = true;
-                    return;
-                }
-                
-                submitAttendance(studentId, qrData.date, qrData.token);
-                
-            } catch (e) {
-                resultDiv.textContent = "Error: " + e.message;
-                resultDiv.className = "error";
-                scannerActive = true;
-            }
-        }
-        
-        function submitAttendance(studentId, date, token) {
-            fetch('process_attendance.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    student_id: studentId,
-                    date: date,
-                    token: token
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                resultDiv.textContent = data.message;
-                resultDiv.className = data.success ? "success" : "error";
-            })
-            .catch(error => {
-                resultDiv.textContent = "Network error: " + error.message;
-                resultDiv.className = "error";
-            });
-        }
-        
-        // Manual entry
-        manualBtn.addEventListener('click', () => {
-            manualForm.style.display = 'block';
-            manualBtn.style.display = 'none';
-        });
-        
-        submitManual.addEventListener('click', () => {
-            const studentId = document.getElementById('student-id').value;
-            if (!studentId) {
-                alert("Please enter a Student ID");
-                return;
-            }
-            
-            const date = prompt("Enter attendance date (YYYY-MM-DD):");
-            if (!date) return;
-            
-            const token = prompt("Enter the attendance token (from your teacher):");
-            if (!token) return;
-            
-            submitAttendance(studentId, date, token);
-        });
-    </script>
+      }
+      requestAnimationFrame(tick);
+    }
+  </script>
 </body>
 </html>
